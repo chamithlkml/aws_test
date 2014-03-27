@@ -2,6 +2,8 @@
 
 require 'vendor/autoload.php';
 
+fwrite(STDOUT, "Initiating..." . PHP_EOL);
+
 $ec2Client = \Aws\Ec2\Ec2Client::factory(array(
     
     // User's amazon aws access key
@@ -14,6 +16,8 @@ $ec2Client = \Aws\Ec2\Ec2Client::factory(array(
     'region' => 'us-west-2',
 ));
 
+fwrite(STDOUT, "Reading security rules..." . PHP_EOL);
+
 $result = $ec2Client->getDescribeSecurityGroupsIterator(array(
         'DryRun' => false,
     
@@ -24,6 +28,11 @@ $result = $ec2Client->getDescribeSecurityGroupsIterator(array(
         'page_size' => 10
     )
 );
+
+if(!$result){
+    
+    fwrite(STDOUT, "Erroroooooooo" . PHP_EOL);
+}
 
 foreach($result as $key=>$iterate){
     
@@ -39,6 +48,16 @@ foreach($result as $key=>$iterate){
 //Empty array representing rules added only for 100.100.100.100/32
 $rulesOnlyIn100 = array(); 
 
+$RulesCount = count($securityRules);
+
+if($RulesCount == 0){
+    
+    fwrite(STDOUT, "Found no security rules..." . PHP_EOL);
+    exit();
+    
+}
+
+fwrite(STDOUT, "Found $RulesCount types of security rule(s)..." . PHP_EOL);
 
 foreach($securityRules as $rule){
     
@@ -66,26 +85,35 @@ foreach($securityRules as $rule){
 //Empty array representing new rules to be added
 $newRules = array();
 
-if(count($rulesOnlyIn100) > 0){
-    
-    foreach($rulesOnlyIn100 as $rule){
-        $rule['IpRanges'] = array(
+$ip100RuleCount = count($rulesOnlyIn100);
+
+if($ip100RuleCount == 0){
+    fwrite(STDOUT, "No rules found added only for 100.100.100.100/25 ip range. Exiting..." . PHP_EOL);
+    exit();
+}
+
+
+fwrite(STDOUT, "$ip100RuleCount rule(s) found only for 100.100.100.100/32 range and need to be added to 200.200.200.200/32 range" . PHP_EOL);
+
+foreach($rulesOnlyIn100 as $rule){
+    $rule['IpRanges'] = array(
             array(
                 //Change ip range into 200.200.200.200/32
                 'CidrIp' => '200.200.200.200/32'
                 )
-        );
+    );
         
-        $newRules[] = $rule;
+    $newRules[] = $rule;
         
-    }
+}
     
-    //Add security
-    $ec2Client->authorizeSecurityGroupIngress(array(
+//Adding new security rules security
+$response = $ec2Client->authorizeSecurityGroupIngress(array(
+    
     'DryRun' => false,
     'GroupName' => 'database-servers',
     'IpPermissions' => $newRules
     
-    ));
-    
-}
+));
+
+fwrite(STDOUT, "Successfully updated the security group." . PHP_EOL);
