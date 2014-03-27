@@ -2,7 +2,6 @@
 
 require 'vendor/autoload.php';
 
-
 $ec2Client = \Aws\Ec2\Ec2Client::factory(array(
     'key'    => 'AKIAIZ2SOT6CPAZH4V3A',
     'secret' => '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',
@@ -22,21 +21,54 @@ foreach($result as $key=>$iterate){
     $securityRules = $iterate['IpPermissions'];
 }
 
-$rules_200 = array();
+
+$rulesOnlyIn100 = array();
+
+
 
 foreach($securityRules as $rule){
     
-    if($rule['IpRanges'][0]['CidrIp'] == '100.100.100.100/32'){
+    $ipRules = array();
+    
+    if(is_array($rule['IpRanges'])){
         
-        $rule['IpRanges'][0]['CidrIp'] = '200.200.200.200/32';
-        $rules_200[] = $rule;
+        foreach($rule['IpRanges'] as $ipRange){
+            
+            if(isset($ipRange['CidrIp'])){
+                $ipRules[] = $ipRange['CidrIp'];
+            }
+        }
+        
     }
+    
+    
+    
+    if(in_array('100.100.100.100/32', $ipRules) && !in_array('200.200.200.200/32', $ipRules)){
+        $rulesOnlyIn100[] = $rule;
+    }
+    
 }
 
+$newRules = array();
 
-$ec2Client->authorizeSecurityGroupIngress(array(
+if(count($rulesOnlyIn100) > 0){
+    
+    foreach($rulesOnlyIn100 as $rule){
+        $rule['IpRanges'] = array(
+            array( 
+                'CidrIp' => '200.200.200.200/32'
+                )
+        );
+        
+        $newRules[] = $rule;
+        
+    }
+    
+    $ec2Client->authorizeSecurityGroupIngress(array(
     'DryRun' => false,
     'GroupName' => 'database-servers',
-    'IpPermissions' => $rules_200
+    'IpPermissions' => $newRules
     
-));
+    ));
+    
+}
